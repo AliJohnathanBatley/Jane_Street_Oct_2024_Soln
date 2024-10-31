@@ -1,0 +1,258 @@
+from timeit import default_timer as timer
+from colorama import Fore, Style, init
+init()
+start = timer() #Timing to test how much various changes have sped up the code
+
+#Check if the knight's move is within the grid and not visited:
+def is_valid_move(x, y, visited):
+    return 0 <= x < 6 and 0 <= y < 6 and (y, x) not in visited
+
+def find_knight_paths(x, y, target, path, visited, max_length, all_paths):
+    knight_moves = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2), (-1, -2)]# Possible knight moves
+    if len(path) > max_length: #If path length exceeds max, immediately terminate this path
+        return
+    
+    #If only 1 move left before reaching max path length and knight not on a square that can reach target in 1 move, terminate:
+    if len(path) >= max_length:
+        if target == (5, 5) and (y, x) != target and (y, x) != (4, 3) and (y, x) != (3, 4):
+            return
+        if target == (0, 5) and (y, x) != target and (y, x) != (1, 3) and (y, x) != (2, 4):
+            return     
+
+    #If only 2 moves left before reaching max path length and knight not on a square that can reach target in 2 moves, terminate:  
+    if len(path) >= max_length - 1:
+        if target == (5, 5) and (y, x) not in (target, (4, 3), (3, 4), (5, 1), (1, 5), (5, 3), (3, 5), (4, 2), (2, 4), (3, 1), (1, 3) ,(2, 2)):
+            return
+        if target == (0, 5) and (y, x) not in (target, (1, 3), (2, 4), (0, 1), (0, 3), (1, 2), (2, 1), (2, 5), (3, 2), (3, 4), (4, 3), (4, 5)):
+            return
+        
+    #If only 3 moves left before reaching max path length and knight on a square that cannot reach target in 3 moves, terminate:
+    if len(path) >= max_length - 2:
+        if target == (5, 5) and (y, x) in ((0, 0), (2, 0), (0, 2), (4, 0), (0, 4), (1, 1), (3, 3), (4, 4)):
+            return
+        if target == (0, 5) and (y, x) in ((1, 0), (3, 0), (5, 0), (4, 1), (5, 2), (2, 3), (1, 4), (5, 4)):
+            return
+    
+    #NOTE: Knights on all squares in a 6x6 board can reach the corner in <=4 moves so no further additions will speed up the code
+
+    #If the 2 squares needed to reach either target in the corners of board are taken and target not reached then target is unreachable, terminate:
+    if target == (5, 5) and (5, 5) not in visited:
+        if (4, 3) in visited and (3, 4) in visited:
+            return
+
+    if target == (0, 5) and (0, 5) not in visited:
+        if (1, 3) in visited and (2, 4) in visited:    
+            return
+    #NOTE: Checking whether the the additional 10 squares are also occupied each time increases the time to run
+    
+    #If the knight reaches the target, append a copy of the current path:
+    if (y, x) == target:
+        all_paths.append(path[:])
+        return
+    
+    #Explore all possible knight moves
+    for dx, dy in knight_moves:
+        new_x, new_y = x + dx, y + dy
+        if is_valid_move(new_x, new_y, visited):
+            visited.add((new_y, new_x)) #Mark the new position as visited
+            path.append((new_y, new_x)) #Add the new position to the path
+            
+            #Recursively find all knight paths from (y, x) to the target with path length <= maximum length:
+            find_knight_paths(new_x, new_y, target, path, visited, max_length, all_paths)
+            
+            #Unmark the position and remove from the path
+            visited.remove((new_y, new_x))
+            path.pop()
+
+def knight_walks_red(max_length): #Find all possible knight walks on red tour with path length <= maximum length:
+    start = (5, 0)  #Starting position in the bottom-left corner
+    target = (0, 5)  #Target position in the top-right corner
+    path = [start]  #Initialise path with the starting position
+    visited = {start}  #Track visited positions
+    all_paths = []  #List to store all valid paths
+
+    #Start finding paths
+    find_knight_paths(0, 5, target, path, visited, max_length, all_paths)
+
+    return all_paths
+
+def knight_walks_blue(max_length): #Find all possible knight walks on blue tour with path length <= maximum length:
+    start = (0, 0)  #Starting position at the top-left corner
+    target = (5, 5)  #Target position at the bottom-right corner
+    path = [start]  #Initialize path with the starting position
+    visited = {start}  #Track visited positions
+    all_paths = []  #List to store all valid paths
+
+    #Start finding paths
+    find_knight_paths(0, 0, target, path, visited, max_length, all_paths)
+
+    return all_paths
+
+def score_sys_red(i, j, k, paths): #Apply rules of game for red tour (multiply if between different integers, otherwise increment)
+    a = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (2, 1), (3, 1), (4, 1), (5, 1), (4, 2), (5, 2)]
+    b = [(0, 1), (1, 1), (0, 2), (1, 2), (2, 2), (3, 2), (2, 3), (3, 3), (4, 3), (5, 3), (4, 4), (5, 4)]
+    c = [(0, 3), (1, 3), (0, 4), (1, 4), (2, 4), (3, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5)] #Keep track of which squares take which values
+    score = i
+    values = []
+    path = []
+    for n in range(len(paths) - 1):
+        if score > 2024:
+            return ([False]) #Terminate path if score exceeds target of 2024
+        if paths[n+1] in a: #These are the rules of the game: (Multiply if going between different values otherwise increment)
+            if paths[n] in a:
+                score += i
+            if paths[n] not in a:
+                score *= i
+        elif paths[n+1] in b:
+            if paths[n] in b:
+                score += j
+            if paths[n] not in b:
+                score *= j
+        elif paths[n+1] in c:
+            if paths[n] in c:
+                score += k
+            if paths[n] not in c:
+                score *= k
+    if score == 2024:
+        values = ([i, j, k])
+        path.append(paths) #Store paths and values that correctly get target score of 2024
+    return ([score == 2024, path, values]) #Return True if path and values work (becomes useful later), otherwise False
+
+def score_sys_blue(i, j, k, paths): #Apply rules of game for blue tour (multiply if between different integers, otherwise increment)
+    a = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (2, 1), (3, 1), (4, 1), (5, 1), (4, 2), (5, 2)]
+    b = [(0, 1), (1, 1), (0, 2), (1, 2), (2, 2), (3, 2), (2, 3), (3, 3), (4, 3), (5, 3), (4, 4), (5, 4)]
+    c = [(0, 3), (1, 3), (0, 4), (1, 4), (2, 4), (3, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5)] #Keep track of which square takes which values
+    score = i #Start with a score of A as per rules of the game
+    values = []
+    path = []
+    for n in range(len(paths) - 1):
+        if score > 2024 - k:
+            return ([False]) #Terminate path if score exceeds target of 2024
+        if paths[n+1] in a: #These are the rules of the game:
+            if paths[n] in a:
+                score += i
+            if paths[n] not in a:
+                score *= i
+        elif paths[n+1] in b:
+            if paths[n] in b:
+                score += j
+            if paths[n] not in b:
+                score *= j
+        elif paths[n+1] in c:
+            if paths[n] in c:
+                score += k
+            if paths[n] not in c:
+                score *= k
+    if score == 2024:
+        values = ([i, j, k])
+        path.append(paths) #Store paths and values that correctly get target score of 2024
+    return ([score == 2024, path, values]) #Return True if path and values work (becomes useful later), otherwise False
+
+def conversion(path): #Enter a list of tuples, this function changes it to correct format for Jane Street board
+    converted_path = ""
+    for i in range(len(path)):
+        second_entry = str(6 - path[i][0]) #Change 2nd numbers in tuples from grid system ((0, 0) in top left, (5, 5) bottom right) to Jane Street board format
+        if path[i][1] == 0:
+            first_entry = "a"
+        elif path[i][1] == 1:
+            first_entry = "b"
+        elif path[i][1] == 2:
+            first_entry = "c"
+        elif path[i][1] == 3:
+            first_entry = "d"
+        elif path[i][1] == 4:
+            first_entry = "e"
+        elif path[i][1] == 5:
+            first_entry = "f" #Change 1st numbers from grid system to letters used on the Jane Street Board
+        converted_path += (first_entry + second_entry + ",")
+    converted_path2 = converted_path.rstrip(",")
+    return(converted_path2) #Return corrected format of path
+
+
+def iterate(max_length, A, B, C, max_sum): #Function that finds solutions
+    all_valid_paths_red = knight_walks_red(max_length)
+    all_valid_paths_blue = knight_walks_blue(max_length) #Initialise the possible knight walks
+
+    path_list = []
+    path_list_all = []
+    values = []
+    values_all = []
+    for i in range(1, A + 1): #A value
+        for j in range(1, B + 1): # B value
+            for k in range(1, C + 1): #C values [Choose values based on best found soln (Solved: Found (1, 3, 2) [and (2, 3, 1) and (3, 2, 1)])]
+                if i + j + k > max_sum: #If sum exceeds best solution found so far, terminate as it is not useful to us (want improvements to sum)
+                    break
+                if i == j or i == k or j == k:
+                    break #Integers must be distinct as per the puzzle rules
+                for knightwalksred in all_valid_paths_red:
+                    SSR = score_sys_red(i, j, k, knightwalksred) #Make function input possible vals of i, j, k and red knightwalks into this func
+                    if SSR[0]: #True or False val from earlier becomes useful (If we have a working path, this is True and continues)
+                        path_list.append(SSR[1])
+                        values.append(SSR[2])
+                        break #If we have 1 working knightwalk for some vals, stop iterating over the knightwalks as need only 1 solution, check other vals
+                values2 = values #Store the current order of values so we can get the correct indices later
+                values.sort(key=sum) #Sort the sublists of values as we want the one with the smallest sums considered first, func terminates when 1 works         
+                for it in range(len(values)):
+                    val1, val2, val3 = values[it] #In increasing order of sum of vals of sublists, plug said values into func to find if there are any blue knightwalks that work with it
+                    for knightwalksblue in all_valid_paths_blue:
+                        SSB = score_sys_blue(val1, val2, val3, knightwalksblue)
+                        if SSB[0]: #Once again, if a knightwalk exists for this set of values, 1st entry will be True and func continues
+                            path_list_all.append(SSB[1])
+                            values_all.append(values[it])
+                            ind = values2.index(values_all[0]) #Get position of the best value set in order to find corresponding path
+                            #return values_all, path_list[ind], path_list_all #Return set of values (A, B, C) and corresponding red then blue paths
+                            #Undash the above line to make function run by itself (ie without the automation at the bottom)
+                            return [True, values_all[0], conversion(path_list[ind][0]), conversion(path_list_all[0][0])]
+    return [False] #If for all given values, and all possible paths, no combination of the 2 work for red and blue, return "No possible paths"
+#print(iterate(17, 3, 3, 3, 6))  
+'''Uncomment line above to get answers for given maxed lengths'''
+#1st value is max path length, 2nd is max A value to consider, 3rd max B value, 4th max C value and 5th is the maximum sum of 3 digits you want considered
+#NOTE: ONLY USE ODD NUMBERS for 1st entry or computation takes much longer with no benefit (because no paths have even length)
+#NOTE: Paths only have odd length because takes an even number of moves to get from 1 corner to the opposite on 6x6 board, path include starting point
+
+
+
+#1st value is max path length, 2nd is max A value to consider, 3rd max B value, 4th max C value and 5th is the maximum sum of 3 digits you want considered
+
+
+def automate_process(): #Automate the process of finding results, printing values which give lowest sum for each path length as it goes
+    max_sum = 50 #Maximum result that Jane Street will accept, so lower is possible
+    max_length = 5 #Minimum possible path length
+    a = 47
+    b = 47 #47 largest values to consider because other 2 must be distinct positive integers, therefore minimum values of those are 1 and 2
+    c = 47 #With those minimum values and max sum restrictions, 47 is maximum number we need consider
+    keepingtrack = []
+    keepingcount = - 1
+    while max_sum > 6: #6 is the minimum value for the sum of 3 distinct positive integers therefore best theoretical solution
+        iterated = iterate(max_length, a, b, c, max_sum)
+        keepingtrack.append(iterated)
+        keepingcount += 1
+        if iterated[0]: #If the "iterated" function finds a solution, this will be True
+            value_reducer = max(iterated[1][0], iterated[1][1], iterated[1][2])
+            a = value_reducer
+            b = value_reducer #Make A, B, C values the maximum value found in our best solution
+            c = value_reducer #Take the max because we may have numbers with a smaller sum but larger other 2 values if max is significantly smaller
+            max_sum = iterated[1][0] + iterated[1][1] + iterated[1][2] - 1 #Take -1 to guarantee it looks for a better path each time
+            redpath = iterated[2]
+            bluepath = iterated[3]
+        elif not iterated[0] and keepingtrack[keepingcount - 1][0]: 
+            #If latest solution returns False (No better solution for the path length found) but previous solution worked, print these values
+            #since they are the best we have for the given pathlength 
+            print(f'{Fore.YELLOW}{keepingtrack[keepingcount - 1][1]}, {redpath + ","}{bluepath}{Style.RESET_ALL}') #Need to edit because path is wrong
+            max_length += 2 #Start looking for paths with lower sums and greater path lengths
+            #Recall all path lengths are odd so add 2 instead of 1 as we need not consider paths of even length
+        else:
+            max_length += 2
+    return f'The best values are A = {iterated[1][0]}, B = {iterated[1][1]} and C = {iterated[1][2]}, with a1-f6 tour {Fore.RED}{redpath}{Style.RESET_ALL} and a6-f1 tour {Fore.BLUE}{bluepath}{Style.RESET_ALL}'
+
+print(automate_process())
+#Note that this stops looking for paths when it finds the path of length 15 that solves the puzzle since ths puzzle is already solved
+#To find longer path lengths with the same best solution, uncomment line 207 and change the first value to an odd number greater than 15
+
+end = timer() #Stop the clock when code finishes running
+print(end - start) #Display the total time it took to run
+
+'''NOTE: This is complex code with a lot of combinations of knight walks for both red and blue, especially for longer max lengths.
+    On top of this, we iterate over i, j, k values so get even more computations.
+    As such, expect it to take a bit to run (The automate function takes me about 35 seconds to run)
+    With fixed (A, B, C), 17 can take about a minute, 19 about 20 minutes and 21 about an hour depending on whether it can find a combination that works''' 
